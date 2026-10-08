@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Auto kadrowanie kamery",
     "author": "partymejkerr",
-    "version": (1, 0, 0),
+    "version": (2, 0, 0),
     "blender": (4, 4, 0),
     "location": "Widok 3D > panel boczny (N) > zakładka Kadrowanie",
     "description": "Utrzymuje wybrane obiekty na środku kadru i w ramie: animuje cel kamery "
@@ -78,9 +78,12 @@ def _write_keys(fcs, keys):
         fc.update()
 
 
-def _fit_keys(fcs, frames, values, err_fn, tol):
-    """Dokłada klucze tylko tam, gdzie krzywa najbardziej odbiega od ideału."""
-    keys = {frames[0]: values[0], frames[-1]: values[-1]}
+def _fit_keys(fcs, frames, values, err_fn, tol, fixed=None):
+    """Dokłada klucze tylko tam, gdzie krzywa najbardziej odbiega od ideału.
+    fixed: klucze spoza zakresu, które mają zostać bez zmian."""
+    keys = dict(fixed or {})
+    keys[frames[0]] = values[0]
+    keys[frames[-1]] = values[-1]
     while True:
         _write_keys(fcs, keys)
         worst, wi = 0.0, None
@@ -88,9 +91,57 @@ def _fit_keys(fcs, frames, values, err_fn, tol):
             e = err_fn(i, [fc.evaluate(f) for fc in fcs])
             if e > worst:
                 worst, wi = e, i
-        if worst <= tol or wi is None or frames[wi] in keys or len(keys) >= MAX_KEYS:
-            return len(keys)
+        n_in = sum(1 for f in keys if frames[0] <= f <= frames[-1])
+        if worst <= tol or wi is None or frames[wi] in keys or n_in >= MAX_KEYS:
+            return n_in
         keys[frames[wi]] = values[wi]
+
+
+def _keys_outside(id_data, data_path, n, f0, f1):
+    """Klucze (klatka -> wartości) leżące poza zakresem f0..f1."""
+    if id_data is None:
+        return {}
+    fcs = _fcurves(id_data, data_path)
+    if len(fcs) < n:
+        return {}
+    fr = sorted({kp.co[0] for i in range(n) for kp in fcs[i].keyframe_points
+                 if kp.co[0] < f0 or kp.co[0] > f1})
+    return {f: tuple(fcs[i].evaluate(f) for i in range(n)) for f in fr}
+
+
+# ---------------------------------------------------------------- wygładzanie
+
+def _gauss_smooth(a, sigma, radius=None):
+    """Rozmycie gaussowskie w czasie (bez opóźnienia), końce powielone."""
+    a = np.asarray(a, dtype=np.float64)
+    if sigma <= 0 or len(a) < 3:
+        return a.copy()
+    R = int(np.ceil(3 * sigma if radius is None else radius))
+    x = np.arange(-R, R + 1)
+    w = np.exp(-0.5 * (x / sigma) ** 2)
+    w /= w.sum()
+    pad = np.pad(a, [(R, R)] + [(0, 0)] * (a.ndim - 1), mode='edge')
+    if a.ndim == 1:
+        return np.convolve(pad, w, mode='valid')
+    return np.stack([np.convolve(pad[:, j], w, mode='valid') for j in range(a.shape[1])], axis=1)
+
+
+def _min_filter(a, R):
+    pad = np.pad(a, R, mode='edge')
+    return np.array([pad[i:i + 2 * R + 1].min() for i in range(len(a))])
+
+
+def _smooth_limit(limit, sigma, single_valley):
+    """Gładka krzywa, która w każdej klatce jest <= limit (nigdy nie przekracza)."""
+    r = np.asarray(limit, dtype=np.float64)
+    if single_valley:  # najpierw tylko w dół, potem tylko w górę - bez pompowania
+        pre = np.minimum.accumulate(r)
+        suf = np.minimum.accumulate(r[::-1])[::-1]
+        r = np.maximum(pre, suf)
+    if sigma <= 0:
+        return r
+    R = int(np.ceil(3 * sigma))
+    return _gauss_smooth(_min_filter(r, R), sigma, R)
 
 
 # ---------------------------------------------------------------- ogniskowa: kopia / przywracanie
@@ -258,7 +309,18 @@ class AF_Settings(bpy.types.PropertyGroup):
     include_children: BoolProperty(
         name="Uwzględnij dzieci", default=True,
         description="Do kadrowania wchodzą też obiekty podpięte (parent) pod zaznaczone")
-    use_scene_range: BoolProperty(name="Zakres klatek sceny", default=True)
+    smoothing: IntProperty(
+        name="Wygładzanie (klatki)", default=24, min=0, max=120,
+        description="Jak mocno wygładzić ruch kamery (w klatkach). 0 = bez wygładzania, "
+                    "więcej = spokojniejsza kamera, ale obiekt może lekko odjechać od środka")
+    no_pumping: BoolProperty(
+        name="Bez pompowania ogniskowej", default=True,
+        description="Ogniskowa najpierw tylko się oddala, potem tylko wraca - bez przybliżania "
+                    "i oddalania na zmianę")
+    use_scene_range: BoolProperty(
+        name="Zakres klatek sceny", default=True,
+        description="Wyłącz, żeby kadrować tylko wybrany zakres. Klucze poza zakresem zostają "
+                    "bez zmian, więc można kadrować kilka zakresów po kolei")
     frame_start: IntProperty(name="Od", default=1)
     frame_end: IntProperty(name="Do", default=250)
     tolerance: FloatProperty(
@@ -307,21 +369,25 @@ class AF_OT_auto_frame(bpy.types.Operator):
         orig_frame = scene.frame_current
         cam["af_objects"] = "\n".join(o.name for o in objs)
 
+        # klucze spoza zakresu (np. z innego zakresu) zostają nienaruszone
+        keep_t = _keys_outside(bpy.data.objects.get(TARGET_PREFIX + cam.name), "location", 3, f0, f1)
+        keep_z = {f: v for f, v in _keys_outside(cd, param, 1, f0, f1).items()}
+
         _restore_zoom(cd)          # cofnij ogniskową z poprzedniego uruchomienia
         _backup_zoom(cd, param)    # zapamiętaj oryginał
         emp = _setup_target(context, cam)
 
         wm = context.window_manager
-        wm.progress_begin(0, 2 * len(frames))
+        wm.progress_begin(0, 3 * len(frames))
         targets, sizes, zoom_req, behind = [], [], [], False
         try:
-            # 1) idealny cel i potrzebna ogniskowa w każdej klatce
+            # 1) idealny cel (środek kadru) w każdej klatce
             for i, f in enumerate(frames):
                 scene.frame_set(f)
                 dg = context.evaluated_depsgraph_get()
                 P = _gather_points(dg, objs)
                 T = Vector(((P.min(0) + P.max(0)) / 2).tolist())
-                size, u = None, np.zeros(0)
+                size = None
                 for _ in range(12):
                     emp.location = T
                     dg.update()
@@ -337,44 +403,73 @@ class AF_OT_auto_frame(bpy.types.Operator):
                         break
                     R = ce.matrix_world.to_3x3().normalized()
                     T = T + R.col[0] * (cu * size[0]) + R.col[1] * (cv * size[1])
+                targets.append(tuple(T))
+                sizes.append(min(size) if size else 1.0)
+                wm.progress_update(i)
+
+            # 2) wygładzona ścieżka celu (bez szarpnięć)
+            sigma = s.smoothing / 4.0
+            targets = [Vector(t) for t in _gauss_smooth(np.array(targets), sigma)]
+
+            # 3) ogniskowa potrzebna przy WYGŁADZONYM celu
+            for i, f in enumerate(frames):
+                scene.frame_set(f)
+                dg = context.evaluated_depsgraph_get()
+                P = _gather_points(dg, objs)
+                emp.location = targets[i]
+                dg.update()
+                ce = cam.evaluated_get(dg)
+                u, v, _ = _project(ce, scene, P)
                 z0 = getattr(ce.data, param)
                 h = (max(abs(u.min() - .5), abs(u.max() - .5), abs(v.min() - .5), abs(v.max() - .5))
                      if len(u) else 0.5)
                 k = (0.5 - margin) / h if h > 1e-9 else 1.0
                 if not s.allow_zoom_in:
                     k = min(k, 1.0)
-                targets.append(T.copy())
-                sizes.append(min(size) if size else 1.0)
                 zoom_req.append(z0 * k if persp else z0 / k)
-                wm.progress_update(i)
+                wm.progress_update(len(frames) + i)
 
-            # 2) klucze celu kamery (tylko tyle, ile trzeba)
+            # klucze celu kamery (tylko tyle, ile trzeba)
             emp.location = targets[0]
             emp.keyframe_insert("location", frame=f0)
             fcs = _fcurves(emp, "location")
             fcs = [fcs[0], fcs[1], fcs[2]]
             n_t = _fit_keys(fcs, frames, [tuple(t) for t in targets],
-                            lambda i, c: (Vector(c) - targets[i]).length / sizes[i], tol)
+                            lambda i, c: (Vector(c) - targets[i]).length / sizes[i], tol,
+                            fixed=keep_t)
 
-            # 3) ogniskowa
-            n_z = 0
+            # ogniskowa (w zakresie; klucze spoza zakresu zostają)
+            fc_orig = _fcurves(cd, param).get(0)
+            orig = [fc_orig.evaluate(f) if fc_orig else getattr(cd, param) for f in frames]
+            changed = False
+            zoom_curve = orig
             if s.zoom_mode == 'ANIM':
-                fc_orig = _fcurves(cd, param).get(0)
-                orig = [fc_orig.evaluate(f) if fc_orig else getattr(cd, param) for f in frames]
                 if any(abs(a - b) > 1e-4 * b for a, b in zip(zoom_req, orig)):
-                    _remove_fcurves(cd, param)
-                    setattr(cd, param, zoom_req[0])
-                    cd.keyframe_insert(param, frame=f0)
-                    fc = _fcurves(cd, param)[0]
-
-                    def err_zoom(i, c):
-                        rel = (c[0] - zoom_req[i]) / zoom_req[i]
-                        clip = rel > 0 if persp else rel < 0
-                        return abs(rel) * (3.0 if clip else 1.0)
-                    n_z = _fit_keys([fc], frames, [(z,) for z in zoom_req], err_zoom, tol)
+                    sign = 1.0 if persp else -1.0   # orto: skala musi być >= wymaganej
+                    zoom_curve = list(sign * _smooth_limit(sign * np.array(zoom_req), sigma,
+                                                           s.no_pumping))
+                    changed = True
             elif s.zoom_mode == 'CONST':
+                zoom_curve = [min(zoom_req) if persp else max(zoom_req)] * len(frames)
+                changed = True
+
+            n_z = 0
+            if s.zoom_mode == 'CONST' and not keep_z:
                 _remove_fcurves(cd, param)
-                setattr(cd, param, min(zoom_req) if persp else max(zoom_req))
+                setattr(cd, param, zoom_curve[0])
+            elif changed or keep_z:
+                _remove_fcurves(cd, param)
+                setattr(cd, param, zoom_curve[0])
+                cd.keyframe_insert(param, frame=f0)
+                fc = _fcurves(cd, param)[0]
+
+                def err_zoom(i, c):
+                    rel = (c[0] - zoom_curve[i]) / zoom_curve[i]
+                    clip = rel > 0 if persp else rel < 0
+                    return abs(rel) * (3.0 if clip else 1.0)
+                n = _fit_keys([fc], frames, [(z,) for z in zoom_curve], err_zoom, tol,
+                              fixed=keep_z)
+                n_z = n if changed else 0
 
             # 4) sprawdzenie wyniku
             worst_m, worst_mf, worst_off, worst_of = 1.0, f0, 0.0, f0
@@ -382,7 +477,7 @@ class AF_OT_auto_frame(bpy.types.Operator):
                 scene.frame_set(f)
                 dg = context.evaluated_depsgraph_get()
                 u, v, _ = _project(cam.evaluated_get(dg), scene, _gather_points(dg, objs))
-                wm.progress_update(len(frames) + i)
+                wm.progress_update(2 * len(frames) + i)
                 if not len(u):
                     continue
                 m = min(u.min(), 1 - u.max(), v.min(), 1 - v.max())
@@ -396,9 +491,9 @@ class AF_OT_auto_frame(bpy.types.Operator):
             scene.frame_set(orig_frame)
 
         zoom_txt = {'ANIM': f"{n_z} kluczy" if n_z else "bez zmian (mieści się)",
-                    'CONST': f"stała {getattr(cd, param):.1f}" + (" mm" if persp else ""),
+                    'CONST': f"stała {zoom_curve[0]:.1f}" + (" mm" if persp else ""),
                     'NONE': "bez zmian"}[s.zoom_mode]
-        lines = [f"Cel kamery: {n_t} kluczy, ogniskowa: {zoom_txt}",
+        lines = [f"Zakres {f0}–{f1}: cel {n_t} kluczy, ogniskowa: {zoom_txt}",
                  f"Najmniejszy margines: {worst_m * 100:.1f}% (klatka {worst_mf})",
                  f"Maks. odchylenie od środka: {worst_off * 100:.1f}% (klatka {worst_of})"]
         if worst_m < 0:
@@ -413,7 +508,8 @@ class AF_OT_auto_frame(bpy.types.Operator):
 class AF_OT_reset(bpy.types.Operator):
     bl_idname = "camera.af_reset"
     bl_label = "Przywróć oryginał"
-    bl_description = "Usuwa automatyczne kadrowanie i przywraca poprzedni cel kamery oraz ogniskową"
+    bl_description = ("Usuwa automatyczne kadrowanie (we wszystkich zakresach) i przywraca "
+                      "poprzedni cel kamery oraz ogniskową")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -453,7 +549,11 @@ class AF_PT_panel(bpy.types.Panel):
         col = layout.column(align=True)
         col.prop(s, "margin")
         col.prop(s, "tolerance")
+        col.prop(s, "smoothing")
         layout.prop(s, "zoom_mode")
+        sub = layout.column()
+        sub.active = s.zoom_mode == 'ANIM'
+        sub.prop(s, "no_pumping")
         layout.prop(s, "allow_zoom_in")
         layout.prop(s, "include_children")
         layout.prop(s, "use_scene_range")
@@ -461,6 +561,7 @@ class AF_PT_panel(bpy.types.Panel):
             row = layout.row(align=True)
             row.prop(s, "frame_start")
             row.prop(s, "frame_end")
+            layout.label(text="Klucze poza zakresem zostają", icon='INFO')
 
         layout.operator(AF_OT_auto_frame.bl_idname, icon='VIEW_CAMERA')
         if "af_constraint" in cam:
