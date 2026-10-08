@@ -22,7 +22,7 @@
 5. Wskaż pobrany plik `auto_kadrowanie_kamery.py` i potwierdź.
 6. Na liście dodatków znajdź „Auto kadrowanie kamery” (możesz wpisać nazwę w pole wyszukiwania) i zaznacz pole przy jego nazwie, jeśli nie jest zaznaczone.
 
-Po rozwinięciu wpisu dodatku zobaczysz jego wersję, autora i miejsce, w którym znajduje się panel.
+Po rozwinięciu wpisu dodatku zobaczysz jego wersję, autora i miejsce, w którym znajduje się panel. Od wersji 2.0.1 są tam też przyciski, które otwierają w przeglądarce [stronę dodatku](https://github.com/partymejker/blender-auto-kadrowanie-kamery) i [formularz zgłaszania błędów](https://github.com/partymejker/blender-auto-kadrowanie-kamery/issues).
 
 ## 3. Gdzie jest panel
 

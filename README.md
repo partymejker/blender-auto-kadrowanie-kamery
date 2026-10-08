@@ -14,6 +14,8 @@ Położenie i obrót kamery oraz animacja obiektów zostają bez zmian. Dodatek 
 - Raport po każdym uruchomieniu: najmniejszy margines i największe odchylenie od środka.
 - Przycisk „Przywróć oryginał”, który cofa wszystkie zmiany dodatku.
 
+Aktualna wersja: 2.0.1.
+
 ## Wymagania
 
 - Blender 4.4 lub nowszy.
@@ -46,6 +48,16 @@ Szczegóły, aktualizacja i odinstalowanie: [docs/instalacja.md](docs/instalacja
 
 GNU General Public License w wersji 3 lub dowolnej późniejszej (GPL-3.0-or-later). Pełny tekst: [LICENSE](LICENSE).
 
+## Testy
+
+Dla osób rozwijających dodatek: w folderze `tests/` jest skrypt, który sam buduje scenę testową i sprawdza działanie dodatku w Blenderze uruchomionym w tle. Dodatek jest wczytywany prosto z repozytorium, bez instalowania. W katalogu głównym repozytorium uruchom:
+
+```
+"<ścieżka do blender.exe>" -b --factory-startup --python tests/test_dodatek.py
+```
+
+Skrypt wypisuje wynik każdego testu i kończy się kodem wyjścia 1, jeśli któryś test nie przejdzie.
+
 ## Autor
 
-partymejkerr
+partymejker

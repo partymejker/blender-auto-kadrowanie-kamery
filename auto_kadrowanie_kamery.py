@@ -1,19 +1,21 @@
 bl_info = {
     "name": "Auto kadrowanie kamery",
-    "author": "partymejkerr",
-    "version": (2, 0, 0),
+    "author": "partymejker",
+    "version": (2, 0, 1),
     "blender": (4, 4, 0),
     "location": "Widok 3D > panel boczny (N) > zakładka Kadrowanie",
     "description": "Utrzymuje wybrane obiekty na środku kadru i w ramie: animuje cel kamery "
                    "i (opcjonalnie) ogniskową. Położenie i obrót kamery zostają bez zmian.",
+    "doc_url": "https://github.com/partymejker/blender-auto-kadrowanie-kamery",
+    "tracker_url": "https://github.com/partymejker/blender-auto-kadrowanie-kamery/issues",
     "category": "Camera",
 }
 
 import bpy
 import numpy as np
 from mathutils import Vector
-from bpy.props import (BoolProperty, EnumProperty, FloatProperty, IntProperty,
-                       PointerProperty, StringProperty)
+from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProperty,
+                       IntProperty, PointerProperty, StringProperty)
 
 try:
     from bpy_extras import anim_utils
@@ -26,7 +28,8 @@ GEOMETRY_TYPES = {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'CURVES',
 TARGET_PREFIX = "AF_Cel_"
 MAX_VERTS = 5000      # większe siatki liczone po bounding boxie (szybciej, z zapasem)
 MAX_KEYS = 60
-CAM_KEYS = ("af_constraint", "af_added", "af_orig_target", "af_orig_subtarget", "af_objects")
+CAM_KEYS = ("af_constraint", "af_added", "af_orig_target", "af_orig_subtarget", "af_objects",
+            "af_target")
 ZOOM_KEYS = ("af_zoom_param", "af_zoom_value", "af_zoom_keys")
 
 
@@ -174,19 +177,49 @@ def _restore_zoom(cd):
 
 # ---------------------------------------------------------------- cel kamery
 
+def _get_target(cam):
+    """Cel kamery: zapisana referencja, potem nazwa, potem cel zapisanego constraintu."""
+    emp = cam.get("af_target")
+    if isinstance(emp, bpy.types.Object):
+        return emp
+    emp = bpy.data.objects.get(TARGET_PREFIX + cam.name)
+    if emp is not None:
+        return emp
+    con = cam.constraints.get(cam.get("af_constraint", ""))
+    t = getattr(con, "target", None)
+    if t is not None and t.name.startswith(TARGET_PREFIX):
+        return t
+    return None
+
+
+def _get_constraint(cam, emp):
+    """Constraint po zapisanej nazwie, a gdy zmieniono mu nazwę - po celu."""
+    con = cam.constraints.get(cam.get("af_constraint", ""))
+    if con is None and emp is not None:
+        con = next((c for c in cam.constraints if c.type in TRACK_TYPES and c.target == emp), None)
+        if con is not None:
+            cam["af_constraint"] = con.name
+    return con
+
+
 def _setup_target(context, cam):
+    scene = context.scene
     name = TARGET_PREFIX + cam.name
-    emp = bpy.data.objects.get(name)
+    emp = _get_target(cam)
     if emp is None:
         emp = bpy.data.objects.new(name, None)
         emp.empty_display_type = 'SPHERE'
         emp.empty_display_size = 0.25
-        context.scene.collection.objects.link(emp)
+    elif emp.name != name:      # kamera zmieniła nazwę
+        emp.name = name
+    if scene.objects.get(emp.name) != emp:      # cel spoza bieżącej sceny
+        scene.collection.objects.link(emp)
+    cam["af_target"] = emp
     emp.hide_render = True
     emp.parent = None
     emp.animation_data_clear()
 
-    con = cam.constraints.get(cam.get("af_constraint", ""))
+    con = _get_constraint(cam, emp)
     if con is None:
         con = next((c for c in cam.constraints if c.type in TRACK_TYPES and not c.mute), None)
         if con is None:
@@ -206,7 +239,8 @@ def _setup_target(context, cam):
 
 
 def _restore_all(cam):
-    con = cam.constraints.get(cam.get("af_constraint", ""))
+    emp = _get_target(cam)
+    con = _get_constraint(cam, emp)
     if con is not None:
         if cam.get("af_added"):
             cam.constraints.remove(con)
@@ -215,29 +249,58 @@ def _restore_all(cam):
             if hasattr(con, "subtarget"):
                 con.subtarget = cam.get("af_orig_subtarget", "")
     _restore_zoom(cam.data)
-    emp = bpy.data.objects.get(TARGET_PREFIX + cam.name)
     if emp is not None:
         bpy.data.objects.remove(emp, do_unlink=True)
     for k in CAM_KEYS:
         if k in cam:
             del cam[k]
+    if hasattr(cam, "af_frame_objects"):
+        cam.af_frame_objects.clear()
 
 
 # ---------------------------------------------------------------- geometria i rzutowanie
 
-def _collect_objects(context, cam, include_children):
-    base = [o for o in context.selected_objects
-            if o != cam and not o.name.startswith(TARGET_PREFIX)]
-    if not base and cam.get("af_objects"):
-        base = [bpy.data.objects[n] for n in cam["af_objects"].split("\n") if n in bpy.data.objects]
+def _expand_objects(base, cam, include_children):
     res, seen = [], set()
     for o in base:
         for x in [o] + (list(o.children_recursive) if include_children else []):
-            if x.name in seen or x == cam or x.type not in GEOMETRY_TYPES:
+            if (x.name in seen or x == cam or x.type not in GEOMETRY_TYPES
+                    or x.name.startswith(TARGET_PREFIX)):
                 continue
             seen.add(x.name)
             res.append(x)
     return res
+
+
+def _stored_objects(scene, cam):
+    """Obiekty z ostatniego razu i liczba tych, których nie ma już w scenie."""
+    if cam.get("af_objects"):       # format z wersji 2.0.0: nazwy w tekście
+        objs = [bpy.data.objects.get(n) for n in cam["af_objects"].split("\n")]
+    elif hasattr(cam, "af_frame_objects"):
+        objs = [it.obj for it in cam.af_frame_objects]
+    else:
+        objs = []
+    ok = [o for o in objs if o is not None and scene.objects.get(o.name) == o]
+    return ok, len(objs) - len(ok)
+
+
+def _store_objects(cam, objs):
+    cam.af_frame_objects.clear()
+    for o in objs:
+        cam.af_frame_objects.add().obj = o
+    if "af_objects" in cam:
+        del cam["af_objects"]
+
+
+def _collect_objects(context, cam, include_children):
+    """Obiekty do kadrowania (wspólne dla panelu i operatora).
+    Zwraca (obiekty, czy z ostatniego razu, liczba pominiętych)."""
+    base = [o for o in context.selected_objects
+            if o != cam and not o.name.startswith(TARGET_PREFIX)]
+    if base:
+        return _expand_objects(base, cam, include_children), False, 0
+    stored, skipped = _stored_objects(context.scene, cam)
+    return _expand_objects(stored, cam, include_children), bool(stored or skipped), skipped
 
 
 def _gather_points(depsgraph, objs):
@@ -292,6 +355,10 @@ def _frame_size_at(cam_eval, scene, point):
     return w, h
 
 
+def _camera_users(cd):
+    return sum(1 for o in bpy.data.objects if o.data == cd)
+
+
 # ---------------------------------------------------------------- ustawienia
 
 class AF_Settings(bpy.types.PropertyGroup):
@@ -329,6 +396,10 @@ class AF_Settings(bpy.types.PropertyGroup):
     last_report: StringProperty()
 
 
+class AF_ObjectRef(bpy.types.PropertyGroup):
+    obj: PointerProperty(type=bpy.types.Object)
+
+
 # ---------------------------------------------------------------- operatory
 
 class AF_OT_auto_frame(bpy.types.Operator):
@@ -351,13 +422,13 @@ class AF_OT_auto_frame(bpy.types.Operator):
         if cd.type == 'PANO':
             self.report({'ERROR'}, "Kamery panoramiczne nie są obsługiwane.")
             return {'CANCELLED'}
-        objs = _collect_objects(context, cam, s.include_children)
+        objs, from_last, skipped = _collect_objects(context, cam, s.include_children)
         if not objs:
             self.report({'ERROR'}, "Zaznacz obiekty, które mają być w kadrze.")
             return {'CANCELLED'}
         f0, f1 = ((scene.frame_start, scene.frame_end) if s.use_scene_range
                   else (s.frame_start, s.frame_end))
-        if f1 <= f0:
+        if f1 < f0:
             self.report({'ERROR'}, "Nieprawidłowy zakres klatek.")
             return {'CANCELLED'}
 
@@ -367,10 +438,10 @@ class AF_OT_auto_frame(bpy.types.Operator):
         tol = s.tolerance / 100.0
         frames = list(range(f0, f1 + 1))
         orig_frame = scene.frame_current
-        cam["af_objects"] = "\n".join(o.name for o in objs)
+        _store_objects(cam, objs)
 
         # klucze spoza zakresu (np. z innego zakresu) zostają nienaruszone
-        keep_t = _keys_outside(bpy.data.objects.get(TARGET_PREFIX + cam.name), "location", 3, f0, f1)
+        keep_t = _keys_outside(_get_target(cam), "location", 3, f0, f1)
         keep_z = {f: v for f, v in _keys_outside(cd, param, 1, f0, f1).items()}
 
         _restore_zoom(cd)          # cofnij ogniskową z poprzedniego uruchomienia
@@ -473,12 +544,14 @@ class AF_OT_auto_frame(bpy.types.Operator):
 
             # 4) sprawdzenie wyniku
             worst_m, worst_mf, worst_off, worst_of = 1.0, f0, 0.0, f0
+            invisible = 0
             for i, f in enumerate(frames):
                 scene.frame_set(f)
                 dg = context.evaluated_depsgraph_get()
                 u, v, _ = _project(cam.evaluated_get(dg), scene, _gather_points(dg, objs))
                 wm.progress_update(2 * len(frames) + i)
                 if not len(u):
+                    invisible += 1
                     continue
                 m = min(u.min(), 1 - u.max(), v.min(), 1 - v.max())
                 off = max(abs((u.min() + u.max()) / 2 - .5), abs((v.min() + v.max()) / 2 - .5))
@@ -493,15 +566,37 @@ class AF_OT_auto_frame(bpy.types.Operator):
         zoom_txt = {'ANIM': f"{n_z} kluczy" if n_z else "bez zmian (mieści się)",
                     'CONST': f"stała {zoom_curve[0]:.1f}" + (" mm" if persp else ""),
                     'NONE': "bez zmian"}[s.zoom_mode]
-        lines = [f"Zakres {f0}–{f1}: cel {n_t} kluczy, ogniskowa: {zoom_txt}",
-                 f"Najmniejszy margines: {worst_m * 100:.1f}% (klatka {worst_mf})",
-                 f"Maks. odchylenie od środka: {worst_off * 100:.1f}% (klatka {worst_of})"]
+        zoom_name = "ogniskowa" if persp else "skala orto"
+        lines = [f"Zakres {f0}–{f1}: cel {n_t} kluczy, {zoom_name}: {zoom_txt}"]
+        warn = worst_m < 0 or behind
+        if invisible == len(frames):
+            nodata = "brak danych (obiekty niewidoczne w żadnej klatce)"
+            lines += [f"Najmniejszy margines: {nodata}",
+                      f"Maks. odchylenie od środka: {nodata}"]
+            warn = True
+        else:
+            lines += [f"Najmniejszy margines: {worst_m * 100:.1f}% (klatka {worst_mf})",
+                      f"Maks. odchylenie od środka: {worst_off * 100:.1f}% (klatka {worst_of})"]
+            if invisible:
+                lines.append(f"W {invisible} klatkach obiekty były niewidoczne dla kamery")
+                warn = True
         if worst_m < 0:
-            lines.append("Uwaga: obiekt wychodzi poza kadr - wybierz ogniskową Animowaną/Stałą")
+            lines.append("Uwaga: obiekt wychodzi poza kadr - " +
+                         ("wybierz ogniskową Animowaną/Stałą" if persp
+                          else "wybierz tryb Animowana/Stała"))
         if behind:
             lines.append("Uwaga: część obiektów była za kamerą w niektórych klatkach")
+        if from_last and skipped:
+            lines.append(f"Pominięto {skipped} obiekt(ów) z ostatniego razu, "
+                         "których nie ma już w pliku")
+            warn = True
+        n_users = _camera_users(cd)
+        if changed and n_users > 1:
+            lines.append(f"Dane kamery „{cd.name}” ma {n_users} obiektów – zmiana "
+                         f"{'ogniskowej' if persp else 'skali'} dotyczy ich wszystkich")
+            warn = True
         s.last_report = "\n".join(lines)
-        self.report({'WARNING' if worst_m < 0 or behind else 'INFO'}, " | ".join(lines))
+        self.report({'WARNING' if warn else 'INFO'}, " | ".join(lines))
         return {'FINISHED'}
 
 
@@ -538,11 +633,17 @@ class AF_PT_panel(bpy.types.Panel):
             layout.label(text="Scena nie ma aktywnej kamery", icon='ERROR')
             return
         layout.label(text=f"Kamera: {cam.name}", icon='CAMERA_DATA')
-        n = len([o for o in context.selected_objects if o != cam])
-        if n:
-            layout.label(text=f"Zaznaczone obiekty: {n}", icon='RESTRICT_SELECT_OFF')
-        elif cam.get("af_objects"):
-            layout.label(text="Użyję obiektów z ostatniego razu", icon='INFO')
+        n_users = _camera_users(cam.data)
+        if n_users > 1:
+            layout.label(text=f"Dane kamery współdzielone ({n_users} obiekty)", icon='ERROR')
+        objs, from_last, _ = _collect_objects(context, cam, s.include_children)
+        if objs:
+            layout.label(text=(f"Użyję obiektów z ostatniego razu ({len(objs)})" if from_last
+                               else f"Obiekty do kadrowania: {len(objs)}"),
+                         icon='INFO' if from_last else 'RESTRICT_SELECT_OFF')
+        elif any(o != cam and not o.name.startswith(TARGET_PREFIX)
+                 for o in context.selected_objects):
+            layout.label(text="Zaznaczone obiekty nie mają geometrii", icon='ERROR')
         else:
             layout.label(text="Zaznacz obiekty do kadrowania", icon='INFO')
 
@@ -550,10 +651,17 @@ class AF_PT_panel(bpy.types.Panel):
         col.prop(s, "margin")
         col.prop(s, "tolerance")
         col.prop(s, "smoothing")
-        layout.prop(s, "zoom_mode")
+        ortho = cam.data.type == 'ORTHO'
+        if ortho:
+            layout.prop(s, "zoom_mode", text="Skala orto")
+        else:
+            layout.prop(s, "zoom_mode")
         sub = layout.column()
         sub.active = s.zoom_mode == 'ANIM'
-        sub.prop(s, "no_pumping")
+        if ortho:
+            sub.prop(s, "no_pumping", text="Bez pompowania skali")
+        else:
+            sub.prop(s, "no_pumping")
         layout.prop(s, "allow_zoom_in")
         layout.prop(s, "include_children")
         layout.prop(s, "use_scene_range")
@@ -572,16 +680,18 @@ class AF_PT_panel(bpy.types.Panel):
                 box.label(text=line)
 
 
-classes = (AF_Settings, AF_OT_auto_frame, AF_OT_reset, AF_PT_panel)
+classes = (AF_Settings, AF_ObjectRef, AF_OT_auto_frame, AF_OT_reset, AF_PT_panel)
 
 
 def register():
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.Scene.af_settings = PointerProperty(type=AF_Settings)
+    bpy.types.Object.af_frame_objects = CollectionProperty(type=AF_ObjectRef)
 
 
 def unregister():
+    del bpy.types.Object.af_frame_objects
     del bpy.types.Scene.af_settings
     for c in reversed(classes):
         bpy.utils.unregister_class(c)

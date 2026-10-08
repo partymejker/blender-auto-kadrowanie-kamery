@@ -22,18 +22,26 @@ Spis treści:
 **Przyczyna:** dodatek nie znalazł żadnego obiektu do kadrowania. Dzieje się tak, gdy:
 
 - nic nie jest zaznaczone, a ta kamera nie była wcześniej kadrowana (albo po kliknięciu „Przywróć oryginał” zapamiętana lista obiektów została wyczyszczona);
-- zaznaczone są tylko obiekty bez geometrii, np. światła, puste obiekty (Empty) bez podpiętych obiektów z geometrią, szkielety albo sama kamera;
-- zapamiętane obiekty zostały usunięte albo zmieniono im nazwy.
+- zaznaczone są tylko obiekty bez geometrii, np. światła, puste obiekty (Empty) bez podpiętych obiektów z geometrią, szkielety albo sama kamera (panel pokazuje wtedy „Zaznaczone obiekty nie mają geometrii”);
+- wszystkie zapamiętane obiekty zostały usunięte z pliku albo ze sceny. Sama zmiana nazw obiektów nie przeszkadza.
 
-**Co zrobić:** zaznacz w widoku 3D obiekty z geometrią (siatki, krzywe, teksty itp.) i kliknij przycisk ponownie. Jeśli chcesz kadrować obiekt bez geometrii, np. Empty, pod który podpięte są siatki, zaznacz go i upewnij się, że opcja „Uwzględnij dzieci” jest włączona.
+**Co zrobić:** zaznacz w widoku 3D obiekty z geometrią (siatki, krzywe, teksty itp.) i kliknij przycisk ponownie. Jeśli chcesz kadrować obiekt bez geometrii, np. Empty, pod który podpięte są siatki, zaznacz go i upewnij się, że opcja „Uwzględnij dzieci” jest włączona. Zanim klikniesz, sprawdź w panelu napis „Obiekty do kadrowania: <liczba>”.
+
+### Napis „Zaznaczone obiekty nie mają geometrii” w panelu
+
+**Objaw:** w górnej części panelu, z ikoną ostrzeżenia, jest napis „Zaznaczone obiekty nie mają geometrii”.
+
+**Przyczyna:** coś jest zaznaczone, ale żaden z zaznaczonych obiektów (ani ich dzieci, jeśli włączone jest „Uwzględnij dzieci”) nie ma geometrii. Tak jest np. przy zaznaczonym samym świetle, pustym obiekcie bez podpiętych siatek albo szkielecie. Kliknięcie **Wycentruj w kamerze** skończy się komunikatem „Zaznacz obiekty, które mają być w kadrze.”. Dodatek nie sięga wtedy po listę z ostatniego razu, bo zaznaczenie ma pierwszeństwo.
+
+**Co zrobić:** zaznacz obiekty z geometrią. Jeśli chcesz użyć obiektów z ostatniego razu, odznacz wszystko. Panel pokaże wtedy „Użyję obiektów z ostatniego razu (<liczba>)”. Jeśli zaznaczony jest pusty obiekt z podpiętymi siatkami, włącz „Uwzględnij dzieci”.
 
 ### Komunikat „Nieprawidłowy zakres klatek.”
 
 **Objaw:** po kliknięciu **Wycentruj w kamerze** pojawia się ten komunikat.
 
-**Przyczyna:** koniec zakresu nie jest większy niż początek. Przy wyłączonym „Zakres klatek sceny” chodzi o pola *Od* i *Do*, przy włączonym o *Start* i *End* sceny. Zakres jednej klatki (np. *Od* = 50, *Do* = 50) też jest nieprawidłowy.
+**Przyczyna:** koniec zakresu jest mniejszy niż początek. Przy wyłączonym „Zakres klatek sceny” chodzi o pola *Od* i *Do*, przy włączonym o *Start* i *End* sceny. Zakres jednej klatki (np. *Od* = 50, *Do* = 50) jest od wersji 2.0.1 prawidłowy.
 
-**Co zrobić:** ustaw *Do* większe niż *Od* (albo *End* większe niż *Start*).
+**Co zrobić:** ustaw *Do* większe lub równe *Od* (albo *End* większe lub równe *Start*).
 
 ### Komunikat „Kamery panoramiczne nie są obsługiwane.”
 
@@ -47,13 +55,13 @@ Spis treści:
 
 ### Ostrzeżenie: obiekt wychodzi poza kadr
 
-**Objaw:** w raporcie jest linia „Uwaga: obiekt wychodzi poza kadr - wybierz ogniskową Animowaną/Stałą”, a „Najmniejszy margines” ma wartość ujemną.
+**Objaw:** w raporcie jest linia „Uwaga: obiekt wychodzi poza kadr - wybierz ogniskową Animowaną/Stałą” (przy kamerze ortograficznej: „Uwaga: obiekt wychodzi poza kadr - wybierz tryb Animowana/Stała”), a „Najmniejszy margines” ma wartość ujemną.
 
-**Przyczyna:** w co najmniej jednej klatce obiekty nie mieszczą się w kadrze. Najczęściej dzieje się tak przy ogniskowej „Bez zmian”, bo dodatek tylko centruje i nie może oddalić kamery.
+**Przyczyna:** w co najmniej jednej klatce obiekty nie mieszczą się w kadrze. Najczęściej dzieje się tak w trybie „Bez zmian”, bo dodatek tylko centruje i nie może oddalić kamery.
 
 **Co zrobić:**
 
-1. Ustaw „Ogniskowa” na *Animowana* albo *Stała* i kliknij **Wycentruj w kamerze** jeszcze raz.
+1. Ustaw „Ogniskowa” (przy kamerze ortograficznej: „Skala orto”) na *Animowana* albo *Stała* i kliknij **Wycentruj w kamerze** jeszcze raz.
 2. Jeśli ostrzeżenie pojawia się mimo to, zmniejsz „Dokładność” (np. do 1%), żeby klucze dokładniej trzymały się wyliczonej ogniskowej, albo zwiększ „Margines”.
 3. Sprawdź klatkę podaną w linii „Najmniejszy margines”. Jeśli w raporcie jest też ostrzeżenie o obiektach za kamerą, zacznij od [tego problemu](#ostrzeżenie-część-obiektów-była-za-kamerą).
 
@@ -68,6 +76,38 @@ Spis treści:
 - Odtwórz animację z widoku kamery (Numpad 0) i znajdź klatki, w których obiekt jest za kamerą lub bardzo blisko niej.
 - Wyklucz te klatki: wyłącz „Zakres klatek sceny” i kadruj tylko zakresy, w których obiekty są przed kamerą (patrz [kadrowanie kilku zakresów](instrukcja.md#kadrowanie-kilku-zakresów)).
 - Nie zaznaczaj do kadrowania obiektów, które przechodzą za kamerę, jeśli nie muszą być w kadrze.
+
+### Obiekty niewidoczne dla kamery
+
+**Objaw:** w raporcie jest linia „W <n> klatkach obiekty były niewidoczne dla kamery” albo, zamiast liczb, „Najmniejszy margines: brak danych (obiekty niewidoczne w żadnej klatce)” i „Maks. odchylenie od środka: brak danych (obiekty niewidoczne w żadnej klatce)”.
+
+**Przyczyna:** w tych klatkach żaden punkt kadrowanych obiektów nie był przed kamerą. Kamera nie mogła się do nich obrócić albo obiekty są cały czas za nią. Dzieje się tak np. wtedy, gdy constraint śledzący ma *Influence* mniejsze niż 1, gdy po nim działa inny constraint ograniczający obrót albo gdy *Locked Track* nie pozwala obrócić kamery w potrzebną stronę. Dla takich klatek dodatek nie ma czego zmierzyć, więc nie wlicza ich do marginesu i odchylenia.
+
+**Co zrobić:**
+
+- Odtwórz animację z widoku kamery (Numpad 0) i sprawdź, czy kamera w ogóle obraca się w stronę celu `AF_Cel_<nazwa kamery>`.
+- Sprawdź constrainty kamery (*Object Constraint Properties*): czy constraint śledzący ma *Influence* = 1 i czy inny constraint nie blokuje obrotu.
+- Jeśli obiekty są niewidoczne tylko w części animacji, kadruj tylko zakresy, w których kamera może je zobaczyć (patrz [kadrowanie kilku zakresów](instrukcja.md#kadrowanie-kilku-zakresów)).
+
+### Pominięto obiekty z ostatniego razu
+
+**Objaw:** w raporcie jest linia „Pominięto <n> obiekt(ów) z ostatniego razu, których nie ma już w pliku”.
+
+**Przyczyna:** nic nie było zaznaczone, więc dodatek użył listy obiektów z ostatniego razu. Część z tych obiektów została od tamtej pory usunięta z pliku albo ze sceny. Pozostałe obiekty zostały wykadrowane normalnie. Zmiana nazw obiektów nie powoduje tego komunikatu.
+
+**Co zrobić:** jeśli usunięcie było zamierzone, nic nie musisz robić. Przy następnym kadrowaniu komunikat już się nie pojawi, bo dodatek zapamiętał nową listę. Jeśli w kadrze brakuje jakiegoś obiektu, zaznacz wszystkie obiekty, które mają być w kadrze, i kliknij **Wycentruj w kamerze** jeszcze raz.
+
+### Dane kamery są współdzielone
+
+**Objaw:** w panelu jest napis „Dane kamery współdzielone (<liczba> obiekty)”, a w raporcie linia „Dane kamery „<nazwa danych>” ma <n> obiektów – zmiana ogniskowej dotyczy ich wszystkich” (przy kamerze ortograficznej: „… zmiana skali dotyczy ich wszystkich”).
+
+**Przyczyna:** kilka obiektów-kamer korzysta z tych samych danych kamery (*Object Data*). Tak się dzieje np. po powieleniu kamery przez *Duplicate Linked* (Alt+D). Ogniskowa i skala są zapisane w danych kamery, więc ich zmiana dotyczy wszystkich tych kamer. Napis w panelu pojawia się zawsze przy współdzielonych danych, a linia w raporcie tylko wtedy, gdy dodatek rzeczywiście zmienił ogniskową lub skalę.
+
+**Co zrobić:**
+
+- Jeśli inne kamery mają mieć własną ogniskową, rozdziel dane, zanim zaczniesz kadrować: zaznacz kamerę, przejdź do *Object Data Properties* i kliknij liczbę użytkowników obok nazwy danych (tworzy to osobną kopię). Dodatek sam niczego nie rozdziela.
+- Jeśli chcesz tylko centrować, bez zmiany ogniskowej, ustaw „Ogniskowa” na *Bez zmian*.
+- Jeśli wspólna ogniskowa jest zamierzona, ostrzeżenie możesz zignorować.
 
 ## Ruch kamery i ogniskowej
 
