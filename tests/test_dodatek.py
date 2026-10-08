@@ -251,8 +251,13 @@ def test_10_wspolne_dane():
     sc.collection.objects.link(cam2)
     select(cube)
     rep = frame()
-    check("Dane kamery „Camera” ma 2 obiektów – zmiana ogniskowej dotyczy ich wszystkich" in rep,
-          f"brak ostrzeżenia o wspólnych danych:\n{rep}")
+    check("Dane kamery „Camera” są używane przez 2 obiekty – zmiana ogniskowej dotyczy ich "
+          "wszystkich" in rep, f"brak ostrzeżenia o wspólnych danych:\n{rep}")
+    forms = {n: af._n_objects(n) for n in (1, 2, 4, 5, 12, 14, 21, 22, 25, 112)}
+    expected = {1: "1 obiekt", 2: "2 obiekty", 4: "4 obiekty", 5: "5 obiektów",
+                12: "12 obiektów", 14: "14 obiektów", 21: "21 obiektów", 22: "22 obiekty",
+                25: "25 obiektów", 112: "112 obiektów"}
+    check(forms == expected, f"odmiana liczebnika: {forms}")
 
 
 def test_11_cel_poza_scena():

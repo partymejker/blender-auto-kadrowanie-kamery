@@ -1,4 +1,4 @@
-# Instrukcja (wersja 2.0.1)
+# Instrukcja (wersja 2.0.2)
 
 [← Powrót do README](../README.md)
 
@@ -57,7 +57,7 @@ Na górze panelu dodatek pokazuje informacje:
 | Napis | Znaczenie |
 |---|---|
 | „Kamera: <nazwa>” | Aktywna kamera sceny, którą dodatek będzie ustawiał. |
-| „Dane kamery współdzielone (<liczba> obiekty)” | Ostrzeżenie: z tych samych danych kamery (*Object Data*) korzysta kilka obiektów. Zmiana ogniskowej lub skali dotknie ich wszystkich. Dodatek niczego sam nie rozdziela. Patrz [rozwiązywanie problemów](rozwiazywanie-problemow.md#dane-kamery-są-współdzielone). |
+| „Dane kamery współdzielone (<liczba> obiekty)” albo „… (<liczba> obiektów)” | Ostrzeżenie: z tych samych danych kamery (*Object Data*) korzysta kilka obiektów. Zmiana ogniskowej lub skali dotknie ich wszystkich. Dodatek niczego sam nie rozdziela. Patrz [rozwiązywanie problemów](rozwiazywanie-problemow.md#dane-kamery-są-współdzielone). |
 | „Obiekty do kadrowania: <liczba>” | Ile obiektów zostanie wykadrowanych: zaznaczone obiekty z geometrią, razem z dziećmi, jeśli włączone jest „Uwzględnij dzieci”. Kamera i cel `AF_Cel_…` nie są liczone. |
 | „Zaznaczone obiekty nie mają geometrii” | Ostrzeżenie: coś jest zaznaczone, ale nie ma czego kadrować (np. samo światło). Przycisk zgłosi wtedy błąd. |
 | „Użyję obiektów z ostatniego razu (<liczba>)” | Nic nie jest zaznaczone, ale ta kamera była już kadrowana. Dodatek użyje zapamiętanej listy, a liczba mówi, ile obiektów z niej zostanie wykadrowanych. |
@@ -140,7 +140,7 @@ W niektórych klatkach część punktów obiektów znalazła się za kamerą. Ta
 
 Pojawia się, gdy nic nie było zaznaczone i dodatek użył listy obiektów z ostatniego razu, a część z tych obiektów usunięto z pliku albo ze sceny. Pozostałe obiekty zostały wykadrowane. Co zrobić: [rozwiązywanie problemów](rozwiazywanie-problemow.md#pominięto-obiekty-z-ostatniego-razu).
 
-**`Dane kamery „<nazwa danych>” ma <n> obiektów – zmiana ogniskowej dotyczy ich wszystkich`** (przy kamerze ortograficznej: „… zmiana skali dotyczy ich wszystkich”)
+**`Dane kamery „<nazwa danych>” są używane przez <n> obiekty – zmiana ogniskowej dotyczy ich wszystkich`** (przy 5 i więcej obiektach: „… przez <n> obiektów …”) (przy kamerze ortograficznej: „… zmiana skali dotyczy ich wszystkich”)
 
 Pojawia się, gdy dodatek zmienił ogniskową lub skalę, a z tych samych danych kamery korzysta kilka obiektów. Co zrobić: [rozwiązywanie problemów](rozwiazywanie-problemow.md#dane-kamery-są-współdzielone).
 

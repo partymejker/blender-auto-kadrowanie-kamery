@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Auto kadrowanie kamery",
     "author": "partymejker",
-    "version": (2, 0, 1),
+    "version": (2, 0, 2),
     "blender": (4, 4, 0),
     "location": "Widok 3D > panel boczny (N) > zakładka Kadrowanie",
     "description": "Utrzymuje wybrane obiekty na środku kadru i w ramie: animuje cel kamery "
@@ -359,6 +359,15 @@ def _camera_users(cd):
     return sum(1 for o in bpy.data.objects if o.data == cd)
 
 
+def _n_objects(n):
+    """Liczba z poprawną formą: 1 obiekt, 2 obiekty, 5 obiektów, 22 obiekty."""
+    if n == 1:
+        return "1 obiekt"
+    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+        return f"{n} obiekty"
+    return f"{n} obiektów"
+
+
 # ---------------------------------------------------------------- ustawienia
 
 class AF_Settings(bpy.types.PropertyGroup):
@@ -592,8 +601,8 @@ class AF_OT_auto_frame(bpy.types.Operator):
             warn = True
         n_users = _camera_users(cd)
         if changed and n_users > 1:
-            lines.append(f"Dane kamery „{cd.name}” ma {n_users} obiektów – zmiana "
-                         f"{'ogniskowej' if persp else 'skali'} dotyczy ich wszystkich")
+            lines.append(f"Dane kamery „{cd.name}” są używane przez {_n_objects(n_users)} – "
+                         f"zmiana {'ogniskowej' if persp else 'skali'} dotyczy ich wszystkich")
             warn = True
         s.last_report = "\n".join(lines)
         self.report({'WARNING' if warn else 'INFO'}, " | ".join(lines))
@@ -635,7 +644,7 @@ class AF_PT_panel(bpy.types.Panel):
         layout.label(text=f"Kamera: {cam.name}", icon='CAMERA_DATA')
         n_users = _camera_users(cam.data)
         if n_users > 1:
-            layout.label(text=f"Dane kamery współdzielone ({n_users} obiekty)", icon='ERROR')
+            layout.label(text=f"Dane kamery współdzielone ({_n_objects(n_users)})", icon='ERROR')
         objs, from_last, _ = _collect_objects(context, cam, s.include_children)
         if objs:
             layout.label(text=(f"Użyję obiektów z ostatniego razu ({len(objs)})" if from_last

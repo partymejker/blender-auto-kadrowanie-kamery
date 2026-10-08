@@ -99,7 +99,7 @@ Spis treści:
 
 ### Dane kamery są współdzielone
 
-**Objaw:** w panelu jest napis „Dane kamery współdzielone (<liczba> obiekty)”, a w raporcie linia „Dane kamery „<nazwa danych>” ma <n> obiektów – zmiana ogniskowej dotyczy ich wszystkich” (przy kamerze ortograficznej: „… zmiana skali dotyczy ich wszystkich”).
+**Objaw:** w panelu jest napis „Dane kamery współdzielone (<liczba> obiekty)”, a w raporcie linia „Dane kamery „<nazwa danych>” są używane przez <n> obiekty – zmiana ogniskowej dotyczy ich wszystkich” (przy 5 i więcej obiektach: „obiektów” zamiast „obiekty”) (przy kamerze ortograficznej: „… zmiana skali dotyczy ich wszystkich”).
 
 **Przyczyna:** kilka obiektów-kamer korzysta z tych samych danych kamery (*Object Data*). Tak się dzieje np. po powieleniu kamery przez *Duplicate Linked* (Alt+D). Ogniskowa i skala są zapisane w danych kamery, więc ich zmiana dotyczy wszystkich tych kamer. Napis w panelu pojawia się zawsze przy współdzielonych danych, a linia w raporcie tylko wtedy, gdy dodatek rzeczywiście zmienił ogniskową lub skalę.
 

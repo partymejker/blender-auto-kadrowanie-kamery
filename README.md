@@ -14,7 +14,7 @@ Położenie i obrót kamery oraz animacja obiektów zostają bez zmian. Dodatek 
 - Raport po każdym uruchomieniu: najmniejszy margines i największe odchylenie od środka.
 - Przycisk „Przywróć oryginał”, który cofa wszystkie zmiany dodatku.
 
-Aktualna wersja: 2.0.1.
+Aktualna wersja: 2.0.2.
 
 ## Wymagania
 

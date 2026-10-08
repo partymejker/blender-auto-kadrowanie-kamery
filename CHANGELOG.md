@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w dodatku „Auto kadrowanie kamery” są opisane w ty
 
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), a numeracja wersji na [wersjonowaniu semantycznym](https://semver.org/lang/pl/).
 
+## [2.0.2] - 2026-10-08
+
+### Naprawiono
+
+- Gramatyka ostrzeżenia o współdzielonych danych kamery: raport pisze „Dane kamery „<nazwa>” są używane przez 2 obiekty” (zamiast „ma 2 obiektów”), a liczba obiektów w raporcie i w panelu ma poprawną formę (2 obiekty, 5 obiektów).
+
 ## [2.0.1] - 2026-10-08
 
 ### Naprawiono
@@ -52,6 +58,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), 
 - Opcje: Margines, Dokładność, Pozwól przybliżać, Uwzględnij dzieci, zakres klatek sceny albo własny.
 - Raport z najmniejszym marginesem i odchyleniem od środka, przycisk „Przywróć oryginał”.
 
+[2.0.2]: https://github.com/partymejker/blender-auto-kadrowanie-kamery/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/partymejker/blender-auto-kadrowanie-kamery/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/partymejker/blender-auto-kadrowanie-kamery/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/partymejker/blender-auto-kadrowanie-kamery/releases/tag/v1.0.0
